@@ -27,7 +27,7 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
     admin.initializeApp({ credential: admin.credential.cert(sa) });
     console.log("✅ Firebase Admin initialized from env");
   } catch (err) {
-    console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:", err);
+    console.error(" Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:", err);
   }
 } else {
   console.warn(
@@ -49,8 +49,7 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowed = /jpeg|jpg|png|webp/;
-  const mimetypeOk = allowed.test(file.mimetype);
+   const mimetypeOk = allowed.test(file.mimetype);
   const extOk = allowed.test(path.extname(file.originalname).toLowerCase());
   if (mimetypeOk && extOk) cb(null, true);
   else cb(new Error("Only image files are allowed (jpg, jpeg, png, webp)."));
@@ -84,8 +83,7 @@ async function verifyFirebaseToken(req, res, next) {
 
   try {
     const authHeader = req.headers.authorization || "";
-    const match = authHeader.match(/^Bearer (.*)$/);
-    if (!match) {
+     if (!match) {
       return res.status(401).json({ error: "Missing Authorization header" });
     }
     const idToken = match[1];
@@ -206,7 +204,7 @@ app.post(
 
       const listFile = path.join(tmpDir, "list.txt");
       const listContent = imageVideos
-        .map((p) => `file '${p.replace(/'/g, "'\\''")}'`)
+        .map((p) => `file '${p.replace(g, "'\\''")}'`)
         .join("\n");
       fs.writeFileSync(listFile, listContent);
 
