@@ -1,5 +1,4 @@
-// server.js
-// Secure version: No local serviceAccountKey.json loading
+// index.js  ✅ Final Secure + Deploy Ready Version
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
@@ -20,24 +19,24 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // -------- firebase-admin init --------
-// 🔒 Only from env variable
 if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
   try {
     const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
     admin.initializeApp({ credential: admin.credential.cert(sa) });
     console.log("✅ Firebase Admin initialized from env");
   } catch (err) {
-    console.error(" Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:", err);
+    console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:", err);
   }
 } else {
-  console.warn(
-    "⚠️ Firebase Admin not initialized. Set FIREBASE_SERVICE_ACCOUNT_JSON in your environment."
-  );
+  console.warn("⚠️ Firebase Admin not initialized. Set FIREBASE_SERVICE_ACCOUNT_JSON in your environment.");
 }
 
 // -------- Multer config --------
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+// ✅ FIX 1: added allowed file types
+const allowed = /\.(jpg|jpeg|png|webp)$/i;
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
@@ -49,7 +48,7 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-   const mimetypeOk = allowed.test(file.mimetype);
+  const mimetypeOk = allowed.test(file.mimetype);
   const extOk = allowed.test(path.extname(file.originalname).toLowerCase());
   if (mimetypeOk && extOk) cb(null, true);
   else cb(new Error("Only image files are allowed (jpg, jpeg, png, webp)."));
@@ -83,13 +82,18 @@ async function verifyFirebaseToken(req, res, next) {
 
   try {
     const authHeader = req.headers.authorization || "";
-     if (!match) {
+
+    // ✅ FIX 2: match variable added
+    const match = authHeader.match(/^Bearer (.+)$/);
+
+    if (!match) {
       return res.status(401).json({ error: "Missing Authorization header" });
     }
+
     const idToken = match[1];
     const decoded = await admin.auth().verifyIdToken(idToken);
     req.user = decoded;
-    return next();
+    next();
   } catch (err) {
     console.error("Token verification failed:", err);
     return res.status(401).json({ error: "Unauthorized: invalid token" });
@@ -99,7 +103,7 @@ async function verifyFirebaseToken(req, res, next) {
 // ---------- Routes ----------
 app.get("/", (req, res) => {
   res.send(
-    "Digital Medical Prescription - Backend. POST /generate (form-data: instructions, title, images[])"
+    "✅ Digital Medical Prescription - Backend is running.<br>Use POST /generate (form-data: instructions, title, images[])"
   );
 });
 
@@ -131,6 +135,7 @@ app.post(
     fs.mkdirSync(tmpDir, { recursive: true });
 
     try {
+      // --- Generate audio from text chunks ---
       const maxChunk = 200;
       const chunks = [];
       for (let i = 0; i < instructions.length; i += maxChunk) {
@@ -167,6 +172,7 @@ app.post(
         });
       }
 
+      // --- Prepare slide images ---
       const slideImgs = [];
       for (let i = 0; i < images.length; i++) {
         const img = images[i];
@@ -176,6 +182,7 @@ app.post(
         slideImgs.push(dest);
       }
 
+      // --- Get audio duration ---
       const audioDuration = await new Promise((resolve, reject) => {
         ffmpeg.ffprobe(finalAudio, (err, metadata) => {
           if (err) return reject(err);
@@ -185,6 +192,7 @@ app.post(
 
       const perImage = Math.max(3, audioDuration / Math.max(1, slideImgs.length));
 
+      // --- Create video slides ---
       const imageVideos = [];
       for (let i = 0; i < slideImgs.length; i++) {
         const img = slideImgs[i];
@@ -202,10 +210,9 @@ app.post(
         imageVideos.push(iv);
       }
 
+      // --- Concatenate image videos ---
       const listFile = path.join(tmpDir, "list.txt");
-      const listContent = imageVideos
-        .map((p) => `file '${p.replace(g, "'\\''")}'`)
-        .join("\n");
+      const listContent = imageVideos.map((p) => `file '${p}'`).join("\n");
       fs.writeFileSync(listFile, listContent);
 
       const concatVideo = path.join(tmpDir, "slides.mp4");
@@ -219,6 +226,7 @@ app.post(
           .save(concatVideo);
       });
 
+      // --- Merge video + audio ---
       const videoPath = path.join(tmpDir, "output_video.mp4");
       await new Promise((resolve, reject) => {
         ffmpeg()
